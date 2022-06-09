@@ -1,0 +1,60 @@
+/*
+ * Copyright (c) 2006-2020, RT-Thread Development Team
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Change Logs:
+ * Date           Author       Notes
+ * 2020-11-17     cx2470       the first version
+ */
+#ifndef _FANSSPEEDMENUITEM_H_
+#define _FANSSPEEDMENUITEM_H_
+
+#include "CrType.h"
+
+typedef struct
+{
+    S32 FansSpeed;      //风扇速度
+    S32 PLAFansSpeed;   //Pla 材料预设风扇速度
+    S32 ABSFansSpeed;   //ABS 材料预设风扇速度
+}FansSpeed_t;
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+VOID FanQueueInit();
+
+VOID* FansSpeedMenuUPAction(VOID *ArgOut, VOID *ArgIn);
+VOID* FansSpeedMenuDownAction(VOID *ArgOut, VOID *ArgIn);
+VOID* FansSpeedMenuOKAction(VOID *ArgOut, VOID *ArgIn);
+S32   FansSpeedMenuShow(VOID *Arg);
+
+S32   PLAFanSpeedSpecialDisplay(VOID *Arg);
+S32   ABSFanSpeedSpecialDisplay(VOID *Arg);
+S32   FanSpeedSpecialDisplay(VOID *Arg);
+
+VOID* PLAFansSpeedMenuUPAction(VOID *ArgOut, VOID *ArgIn);
+VOID* PLAFansSpeedMenuDownAction(VOID *ArgOut, VOID *ArgIn);
+VOID* PLAFansSpeedMenuOKAction(VOID *ArgOut, VOID *ArgIn);
+S32   PLAFansSpeedMenuShow(VOID *Arg);
+
+VOID* ABSFansSpeedMenuUPAction(VOID *ArgOut, VOID *ArgIn);
+VOID* ABSFansSpeedMenuDownAction(VOID *ArgOut, VOID *ArgIn);
+VOID* ABSFansSpeedMenuOKAction(VOID *ArgOut, VOID *ArgIn);
+S32   ABSFansSpeedMenuShow(VOID *Arg);
+// S32   FansSpeedSpecialDisplay(VOID *Arg);
+
+VOID  SetPLAFanSpeed();
+VOID  SetABSFanSpeed();
+S32   GetCurFansSpeed();
+
+//FansSpeed_t *GetFansConfigInfo();
+//VOID FansConfigRecover();
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _FANSSPEEDMENUITEM_H_ */

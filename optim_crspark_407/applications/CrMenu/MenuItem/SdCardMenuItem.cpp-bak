@@ -1,0 +1,231 @@
+#include "SdCardMenuItem.h"
+#include <CrShowView.h>
+#include <MenuDefaultAction.h>
+#include "CrLcdShowStruct.h"
+#include "ShowAction.h"
+#include "LcmShow.h"
+#include "CrDirentAndFile.h"
+#include "CrMsgQueue.h"
+
+#include "QueueCommonFuns.h"
+#include "PrintMenuItem.h"
+#include "CrMsgType.h"
+#include "CrSdCardDriver.h"
+
+
+static S32 FileListItemIndex = 0;  //文件列表中内容的索引
+struct SdCardPageFileListMsg_t FileList;
+
+static CrMsgQueue_t FileListSend;
+static CrMsg_t FileListRecv;
+#define FILELISTMSG_PRI 1 
+
+
+#if 0
+S32 SdCardFileListInit( VOID )  //输入当前的menuitem数组的名称地址
+{
+    //创建队列
+    memset(&FileList, 0, sizeof(FileList));
+
+    FileListSend = ViewSendQueueOpen(SD_LIST_REQUEST_QUEUE, sizeof(struct ViewParamOptActionMsg_t));
+    FileListRecv = ViewRecvQueueOpen(SD_LIST_REPORT_QUEUE, sizeof(struct SdCardPageFileListMsg_t));
+    memset((void *)&FileList, 0, sizeof(struct DirentInfo_t));
+
+    return IsValidMsgQueue(FileListSend) ? 1 : 0;
+    
+}
+
+VOID *SdCardFileListOKAction(VOID *ArgOut, VOID *ArgIn)  //输入当前的menuitem数组的名称地址
+{
+//    if ( !(ShowPtr) || !ArgOut)
+      if ( !ArgOut )
+        return NULL;
+
+    //获取当前文件名，输出
+    S8 *Name = NULL;
+    S32 CurRow = FileListItemIndex % ((GetShowObject())->GetMaxRow());
+
+    S32 *BackParentMenu = (S32 *)ArgOut;
+    //返回上一级文件夹
+    *BackParentMenu = 0;    //
+
+    if ( FileList.DirHand[CurRow].d_type == DT_DIR )
+    {
+        struct ViewPageInfoMsg_t Page;
+        if ( FileListItemIndex == 0)  //第一个文件夹是返回上一级
+        {
+            // 对上一级
+            //
+            if (strcmp(CurPath, SD_CARD_ROOT_DIR) == 0 )
+            {
+                *BackParentMenu = BACK_PARENT;
+                return ;
+            }
+
+            sprintf(Page.Path, "%s\\..", CurPath);
+
+        }
+        else
+        {
+            sprintf(Page.Path, "%s\\%s", CurPath, FileList.DirHand[CurRow].d_name);
+        }
+
+        Page.PageNo = 0;
+        Page.PageSize = 5;
+        strcpy(Page.Suffix, FILTER);
+
+        QueueSendMsg(FileListSend, ( S8 * )&Page, sizeof(struct ViewPageInfoMsg_t), FILELISTMSG_PRI);
+        
+        //set Mask
+        HideMask |= (MAINMENU_ITEM_PRINTFFROMTF_HID_MASK | MAINMENU_ITEM_PREPARE_HID_MASK);
+        HideMask &= ~(MAINMENU_ITEM_PAUSE_PRINTF_HID_MASK | MAINMENU_ITEM_STOP_PRINTF_HID_MASK | MAINMENU_ITEM_TUNE_HID_MASK);
+
+        rt_kprintf("back parent menu = %d, name = %p\r\n", *BackParentMenu, Name);
+    }
+    else
+    {
+        //对文件的操作
+        if ( strlen(FileList.DirHand[CurRow].d_name) )
+        {
+            struct ViewSetPrintFileMsg_t file;
+            strcpy(file.Name, FileList.DirHand[CurRow].d_name);
+            strcpy(file.Path,CurPath);
+            QueueSendMsg(FileListSend, ( S8 * )&file, sizeof(struct ViewSetPrintFileMsg_t), FILELISTMSG_PRI);
+        }
+
+        *BackParentMenu = BACK_ROOT;
+    }
+
+    return FileList.DirHand[CurRow].d_name;
+}
+
+VOID *SdCardFileListUpAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if (FileListItemIndex == 0)  //当前是首页
+    {
+        return NULL;
+    }
+
+    (FileListItemIndex)--;
+    S32 RowCount = (GetShowObject())->GetMaxRow();
+    if ( (FileListItemIndex % RowCount) == (RowCount - 1) )  //换了一页
+    {
+        S32 Index = (FileListItemIndex / RowCount) * RowCount;
+        //设置上一页界面
+        S8 PageNum = (FileListItemIndex/MAX_FILE_COUNT_IN_PAGE);
+        
+        //send message 
+        ViewPageInfoMsg_t PageInfoMsg;
+        PageInfoMsg.PageNo = PageNum;
+        PageInfoMsg.PageSize = MAX_FILE_COUNT_IN_PAGE;
+
+        strcpy(PageInfoMsg.Path, CurPath);
+        strcpy(PageInfoMsg.Suffix, FILTER);
+        QueueSendMsg(FileListSend, ( S8 * )&PageInfoMsg, sizeof(struct ViewPageInfoMsg_t), FILELISTMSG_PRI);
+        
+
+        //接收
+
+
+
+    }
+    
+    ShowFileList();
+
+    return NULL;
+}
+
+VOID *SdCardFileListDownAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if (  )
+
+    (FileListItemIndex)++;
+    if ( FileListItemIndex % ((GetShowObject())->GetMaxRow()) == 0 )
+    {
+        //设置上一页界面
+        S8 PageNum = (FileListItemIndex/MAX_FILE_COUNT_IN_PAGE);
+        
+        //send message 
+        ViewPageInfoMsg_t PageInfoMsg;
+        PageInfoMsg.PageNo = PageNum;
+        PageInfoMsg.PageSize = MAX_FILE_COUNT_IN_PAGE;
+
+        strcpy(PageInfoMsg.Path, CurPath);
+        strcpy(PageInfoMsg.Suffix, FILTER);
+        QueueSendMsg(FileListSend, ( S8 * )&PageInfoMsg, sizeof(struct ViewPageInfoMsg_t), FILELISTMSG_PRI);
+
+        //接收
+
+
+
+    }
+
+    ShowFileList();
+
+    return NULL;
+}
+
+S32 SdCardFileListShowAction(VOID *Arg)
+{
+    S8  Path[60] = {0};
+    if ( strlen() == 0)  //当前的路径是否为空
+    {
+        //进入到根目录，并将内容显示出来
+        S8 PageNum = 0;
+        //send message 
+        ViewPageInfoMsg_t PageInfoMsg;
+        PageInfoMsg.PageNo = PageNum;
+        PageInfoMsg.PageSize = MAX_FILE_COUNT_IN_PAGE;
+
+        strcpy(PageInfoMsg.Path, CurPath);
+        strcpy(PageInfoMsg.Suffix, FILTER);
+        QueueSendMsg(FileListSend, ( S8 * )&PageInfoMsg, sizeof(struct ViewPageInfoMsg_t), MOVEAXISMSG_PRI);
+
+
+
+    }
+
+    ShowFileList();
+    
+    return 1;
+}
+
+
+VOID ShowFileList()
+{
+    S32 Param = 1;
+    LcmShow *ShowPtr = GetShowObject();
+    ShowPtr->Ioctl(LCD_CLEAN, (VOID *)&Param);
+    ShowPtr->Ioctl(LCD_USING_ASCII_CHARATER_SET, (VOID *)&Param);
+    S32 i, CurRow = FileListItemIndex % (ShowPtr->GetMaxRow());
+    for ( i = 0; i < MAX_NUM_OF_READS; i++ )
+    {
+        if ( i >= ShowPtr->GetMaxRow() )  //超出旧不显示了
+        {
+            break;
+        }
+
+//        if ( FileList.DirHand[i].d_namlen <= 0 )
+//            break;
+
+        S32 HighLight = 0;
+        if ( i == CurRow )  //高亮
+        {
+            HighLight = 1;
+        }
+
+        //显示文件内容
+        struct MenuShowInfo_t Info;
+        Info.Highligh = HighLight;
+        Info.Index = i;
+        Info.MenuType = 3;
+//        Info.ShowData = (VOID *)(FileList.DirHand[i].d_name);
+        ShowItemName(&Info);
+    }
+
+    ShowPtr->Ioctl(LCD_FLUSH, (VOID *)&Param);
+
+    return ;
+}
+
+#endif

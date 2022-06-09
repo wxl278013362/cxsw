@@ -1,0 +1,512 @@
+#include "ShowAction.h"
+#include <MenuDefaultAction.h>
+#include "CrLcdShowStruct.h"
+#include "CrMsgStruct.h"
+#include "rtthread.h"
+#include "PrintMenuItem.h"
+#include "Language.h"
+#include "CrShowView.h"
+
+#if 1
+#include "MapData.h"
+#endif
+
+LcmShow *ShowPtr = NULL;
+//S32 (*)(VOID*)     DisplayAction::PDefaultDisplayFun = NULL;
+static S32 (*DefaultShowFun)(VOID *Arg) = NULL; //默认显示DisplayAction::PDefaultDisplayFun = NULL;
+
+static S32 StartIndex = 0;
+static S32 EndIndex = 1;
+
+static BOOL SwitchMode = 0;
+struct ShowPrintInfo_t ShowInfo = {0};
+
+/****************************************************/
+
+static S32 SwitchPage(S32 CurIndex);
+static S32 SwitchPageSub(S32 CurIndex, struct MenuItem_t *MenuArrayPtr, S32 ArrayEleHide, S32 *StartIndex, S32 *EndIndex);
+static S32 IsItemHide(S32 i, struct MenuItem_t *Array, S32 StartIndex, S32 CurItemIndex, S16 *Index, S8 *High, S32 *Temp, S32 *Flag);    //判断Item是否隐藏
+
+/*****************************************************/
+
+S32 SwitchPage(S32 CurIndex)
+{
+    if ( CurIndex < 0 || !ShowPtr)
+        return 0;
+
+    if ( ShowPtr->GetMaxRow() <= 0)
+        return 0;
+
+    if ( CurIndex < StartIndex )   //
+    {
+        if ( SwitchMode )
+        {
+            StartIndex = (CurIndex / ShowPtr->GetMaxRow()) * ShowPtr->GetMaxRow();
+            EndIndex = StartIndex + ShowPtr->GetMaxRow();
+        }
+        else
+        {
+            StartIndex = CurIndex;
+            EndIndex = StartIndex + ShowPtr->GetMaxRow();
+        }
+    }
+    else if ( CurIndex >= EndIndex )
+    {
+        if ( SwitchMode )
+        {
+            StartIndex = (CurIndex / ShowPtr->GetMaxRow()) * ShowPtr->GetMaxRow();
+            EndIndex = StartIndex + ShowPtr->GetMaxRow();
+        }
+        else
+        {
+            EndIndex = CurIndex + 1;
+            StartIndex = EndIndex - ShowPtr->GetMaxRow();
+        }
+    }
+
+    //做修正
+    if ( StartIndex < 0 )
+        StartIndex = 0;
+
+    if ( EndIndex < 1 )
+        EndIndex = 1;
+
+    return 1;
+}
+
+S32 SwitchPageSub(S32 CurIndex, struct MenuItem_t *MenuArrayPtr, S32 *StartIndex, S32 *EndIndex)
+{
+    if ( !MenuArrayPtr || !StartIndex || !EndIndex )
+        return 0;
+
+    S32 Size = GetItemsCount((VOID *)MenuArrayPtr);
+    S32 Flag = 0;
+    S32 Temp[Size] = {0};
+
+    for ( S32 i = 0; i < Size ; i++ )
+    {
+        if ( ((MenuArrayPtr->HideMask) & (HideMask)) == 0 )
+        {
+            Temp[Flag] = i;
+            if ( CurIndex == Temp[Flag] )
+            {
+                *StartIndex = (Flag / ShowPtr->GetMaxRow()) * ShowPtr->GetMaxRow();
+            }
+            Flag ++;
+        }
+        MenuArrayPtr++;
+    }
+
+    *EndIndex = Temp[Flag - 1];
+
+    return 1;
+}
+
+S32 ShowInit(LcmShow *ShowObjectPtr, BOOL SwitchPageMode)
+{
+    if ( !ShowObjectPtr )
+        return 0;
+
+    ShowPtr = ShowObjectPtr;
+    SwitchMode = SwitchPageMode;
+    StartIndex = 0;
+    EndIndex = ShowPtr->GetMaxRow();
+    if ( EndIndex <= 0 )
+        EndIndex = 1;
+
+//    printf("-----------------StartIndex = %d, EndIndex = %d\n", StartIndex, EndIndex);
+
+    // 创建定时器定时获取temper， 运动信息，sd卡状态，打印信息和打印文件名
+
+    return 1;
+}
+
+LcmShow* GetShowObject()
+{
+    return ShowPtr;
+}
+
+S32 ShowItemName(VOID *MenuInfoPtr)
+{
+    if ( !ShowPtr )
+        return 0;
+
+    //暂时不实现(改变内容的显示)
+    struct MenuShowInfo_t *InfoPtr = (struct MenuShowInfo_t *)MenuInfoPtr;
+   // rt_kprintf("item name %s, row = %d, light = %d", InfoPtr->ShowData, InfoPtr->Index, InfoPtr->Highligh);
+    S32 Res = ShowPtr->ShowString((S8 *)(InfoPtr->ShowData), InfoPtr->Index, 0, InfoPtr->Highligh);
+   //  Res = ShowPtr->WriteRow((S8 *)(InfoPtr->ShowData), strlen((S8*)(InfoPtr->ShowData)), InfoPtr->Index, 0);  //测试接口
+    S8 Temp[2] = {0};
+
+    if ( InfoPtr->MenuType == RollBackTypeMenu )
+    {
+        Temp[0] = '^';
+        ShowPtr->Ioctl(LCD_USING_ASCII_CHARATER_SET, Temp);
+        ShowPtr->WriteString(Temp, (InfoPtr->Index + 1) * ShowPtr->GetRowPixelHeight() , 123, 0);
+    }
+    else if ( InfoPtr->MenuType == FatherTypeMenu )
+    {
+        Temp[0] = '>';
+        ShowPtr->Ioctl(LCD_USING_ASCII_CHARATER_SET, Temp);
+        ShowPtr->WriteString(Temp, (InfoPtr->Index + 1) * ShowPtr->GetRowPixelHeight() , 123, 0);
+    }
+
+    return Res;
+}
+
+S32 ShowItems(struct MenuItem_t *MenuArrayPtr, S32 Count, S32 CurItemIndex)
+{
+    //printf("1 display = %p, menu array = %p, Count = %d, CurItemIndex = %d\n", ShowPtr, MenuArrayPtr, Count, CurItemIndex);
+    if ( !ShowPtr || !MenuArrayPtr || (Count <= 0) || (CurItemIndex < 0) )
+        return 0;
+
+    if ( Count == 1 )
+    {
+        MenuArrayPtr->Show(NULL);
+        return 1;
+    }
+
+    S32 CmdParam = 0;
+
+    MenuItem_t  *ItemPtr = MenuArrayPtr;
+
+    //切换页
+//    SwitchPage(CurItemIndex);
+    SwitchPageSub(CurItemIndex, MenuArrayPtr, &StartIndex, &EndIndex);
+
+    S32 i = 0, Offset = 0, Flag = 0, Temp[Count]= {0};
+    struct MenuShowInfo_t Info;
+
+    ItemPtr = NULL;
+    S32 MaxLen = ShowPtr->GetMaxCol() + 1;//获取到的MaxLen是最多能显示的列，但是'\0'也占用了一个 故加1
+    ShowPtr->Ioctl(LCD_CLEAN, (VOID *)&CmdParam);
+    S8 Buff[MaxLen];
+
+    for ( i = 0; i < Count ; i++ )
+    {
+        ItemPtr = (struct MenuItem_t *)((S8 *)MenuArrayPtr + Offset);
+        Offset += sizeof(MenuItem_t);
+
+        Info.Highligh = 0;
+        Info.MenuType = 0;
+
+        if ( ((ItemPtr->HideMask) & (HideMask)) == 0 )
+        {
+            Temp[Flag] = i;
+            Info.Index = Flag - StartIndex;
+            if ( Temp[Flag] == CurItemIndex )
+                Info.Highligh = 1;
+
+            Flag++;
+        }
+        else
+            continue;
+
+        Languages::FindMenuItemNameById(ItemPtr->ItemNameId, Buff, MaxLen);
+        Info.ShowData = Buff;
+
+        if ( (!(ItemPtr->Next)) && (!(ItemPtr->OkAction)) )  //回退菜单
+        {
+            Info.MenuType = RollBackTypeMenu;
+        }
+        else if ( ItemPtr->Next )  //子菜单
+        {
+            Info.MenuType = FatherTypeMenu;
+        }
+
+        if ( (ItemPtr->Show) )
+            ItemPtr->Show(&Info);
+    }
+    ShowPtr->Ioctl(LCD_FLUSH, (VOID *)&CmdParam);
+
+    return 1;
+}
+
+#if 0
+S32  ShowDefaultAction::SetDefaultShowFun(S32 (*DefaultDisplay)(VOID *Arg))
+{
+    if ( !DefaultDisplay )
+        return 0;
+
+    DefaultShowFun = DefaultDisplay;
+
+    return 1;
+}
+#endif
+
+S32 ShowRoot(VOID *DataPtr)
+{
+    if ( !ShowPtr)
+        return 0;
+
+    static S32 Count = 0;
+#if 1
+//    printf("show ptr : %p, Data ptr : %p\r\n", ShowPtr, DataPtr);
+    //测试用
+//    struct  ShowPrintInfo_t*  Info = (struct  ShowPrintInfo_t *)DataPtr;
+    struct ShowPrintInfo_t *Info = &ShowInfo;
+
+    struct LcdCtrlParam_t Lcd = {0};
+    S32 CmdParam = 0;
+    ShowPtr->Ioctl(LCD_CLEAN, (VOID*)&CmdParam);
+ //   ShowPtr->Ioctl(LCD_USING_ASCII_CHARATER_SET, (VOID*)&CmdParam);
+
+    if ( strlen (Info->Name) <= 7 )
+    {
+        Lcd.X = 0;
+        Lcd.Y = 16;
+        ShowPtr->WriteString(Info->Name, Lcd.Y, Lcd.X);
+    }
+    else
+    {
+        Lcd.X = 0;
+        Lcd.Y = 16;
+        S8 Ptr[10] = {0};
+        snprintf(Ptr, 8, "%s", Info->Name);
+        ShowPtr->WriteString(Ptr, Lcd.Y, Lcd.X);
+        sprintf(Ptr, "%s", (Info->Name + 7));
+        Lcd.X = (7 - strlen(Ptr)) * (128 / ShowPtr->GetMaxCol()) / 2;//居中显示
+        Lcd.Y = 25;
+        ShowPtr->WriteString(Ptr, Lcd.Y, Lcd.X);
+    }
+
+    S32 Temp = 0, SubTemp = 0;
+    S8  Buff[32] = {0};
+    Lcd.X = 42;
+    Lcd.Y = 7;
+    Temp = Info->PreheatNozzleTemp.Temp;
+//    SubTemp = (Info->PreheatNozzleTemp.Temp - Temp) * 100;
+    sprintf(Buff, "%d°", Temp);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+    Lcd.X = 42;
+    Lcd.Y = 28;
+    Temp = Info->NozzleTemp.Temp;
+//    SubTemp = (Info->PreheatBedTemp.Temp - Temp) * 100;
+    memset(Buff, 0, sizeof(Buff));
+    sprintf(Buff, "%d°", Temp);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+    Lcd.X = 75;
+    Lcd.Y = 7;
+    Temp = Info->PreheatBedTemp.Temp;
+//    SubTemp = (Info->NozzleTemp.Temp - Temp) * 100;
+    memset(Buff, 0, sizeof(Buff));
+    sprintf(Buff, "%d°", Temp);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+    Lcd.X = 75;
+    Lcd.Y = 28;
+    Temp = Info->BedTemp.Temp;
+//    SubTemp = (Info->BedTemp.Temp - Temp) * 100;
+    memset(Buff, 0, sizeof(Buff));
+    sprintf(Buff, "%d°", Temp);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+    Lcd.X = 13;
+    Lcd.Y = 50;
+    memset(Buff, 0, sizeof(Buff));
+    sprintf(Buff, "%d%%", 100);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+    Lcd.X = 61;
+    Lcd.Y = 48;
+    memset(Buff, 0, sizeof(Buff));
+    sprintf(Buff, "%d:%02d:%02d ", Info->Time.Hour, Info->Time.Minter, Info->Time.Second);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+    Lcd.X = 104;
+    Lcd.Y = 51;
+    memset(Buff, 0, sizeof(Buff));
+    sprintf(Buff, "%d%%", Info->Progress.Progress);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+    //绘制XYZ位置
+    //绘制坐标位置的外框
+    Lcd.X = 0;
+    Lcd.Y = 29;
+    Lcd.Width = 128;
+    Lcd.Height = 11;
+    ShowPtr->Ioctl(LCD_WRITE_RECTANGLE, (VOID *)&Lcd);
+
+    //绘制X坐标
+    Lcd.X = 2;
+    Lcd.Y = 38;
+    Temp = Info->AixsPos.X_Pos.PosValue;
+    SubTemp = (Info->AixsPos.X_Pos.PosValue - Temp) * 10;
+    memset(Buff, 0, sizeof(Buff));
+    sprintf(Buff, "X %d.%d", Temp, SubTemp);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+
+    //绘制Y坐标
+    Lcd.X = 46;
+    Lcd.Y = 38;
+    Temp = Info->AixsPos.Y_Pos.PosValue;
+    SubTemp = (Info->AixsPos.Y_Pos.PosValue - Temp) * 10;
+    memset(Buff, 0, sizeof(Buff));
+    sprintf(Buff, "Y %d.%d", Temp, SubTemp);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+    //绘制Z坐标
+    Lcd.X = 90;
+    Lcd.Y = 38;
+    Temp = Info->AixsPos.Z_Pos.PosValue;
+    SubTemp = (Info->AixsPos.Z_Pos.PosValue - Temp) * 10;
+    memset(Buff, 0, sizeof(Buff));
+    sprintf(Buff, "Z %d.%d", Temp, SubTemp);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+
+    Lcd.X = 0;
+    Lcd.Y = 62;
+    memset(Buff, 0, sizeof(Buff));
+
+    if ( (Info->DevStatus.Reserve == 0) )
+    {
+  //      ShowPtr->Ioctl(LCD_USING_UTF8_CHARATER_SET, (VOID*)&CmdParam);
+      //  ShowPtr->Ioctl(LCD_USING_ASCII_CHARATER_SET, (VOID*)&CmdParam);
+        sprintf(Buff, "%s", "Ender-3 Pro 准备就绪");
+       // sprintf(Buff, "%s%s", DEVICE_NAME," Ready.");
+    }
+    else
+    {
+        sprintf(Buff, "%s", Info->File.Name);
+    }
+   // sprintf(Buff, "%s", Info->DevStatus.Reserve);
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+#if 1
+
+//    ShowPtr->Ioctl(LCD_USING_ASCII_CHARATER_SET, (VOID*)&CmdParam);
+    Lcd.X = 43;
+    Lcd.Y = 8;
+    Lcd.Width = NOZZLE_MAP_WIDTH;
+    Lcd.Height = NOZZLE_MAP_HEIGHT;
+    ShowPtr->Ioctl(LCD_WRITE_MAP, (VOID *)&Lcd);
+    if ( Info->DevStatus.NozzleStatus )
+    {
+        ShowPtr->Write((VOID *)NozzleHeatingMapData, sizeof(NozzleHeatingMapData));
+    }
+    else
+    {
+        ShowPtr->Write((VOID *)NozzleMapData, sizeof(NozzleMapData));
+    }
+
+    if ( Info->SdStatus.Status )
+    {
+        Lcd.X = 40;
+        Lcd.Y = 41;
+        Lcd.Width = 10;
+        Lcd.Height = 11;
+        ShowPtr->Ioctl(LCD_WRITE_MAP, (VOID *)&Lcd);
+        ShowPtr->Write((VOID *)SdCardMapData, sizeof(SdCardMapData));
+//        if ( GetPrintStatus() == PRINT_READY || GetPrintStatus() == PRINT_STOP  )
+       //     MainMenuArraySdCardStatusSetting(true);
+    }
+    else
+    {
+    //    if ( GetPrintStatus() == PRINT_READY || GetPrintStatus() == PRINT_STOP )
+         //   MainMenuArraySdCardStatusSetting(false);
+    }
+
+    Lcd.X = 73;
+    Lcd.Y = 8;
+    Lcd.Width = BED_MAP_WIDTH;
+    Lcd.Height = BED_MAP_HEIGHT;
+    ShowPtr->Ioctl(LCD_WRITE_MAP, (VOID *)&Lcd);
+    if ( Info->DevStatus.BedStatus )
+    {
+        ShowPtr->Write((VOID *)BedHeatingMapData, sizeof(BedHeatingMapData));
+    }
+    else
+    {
+        ShowPtr->Write((VOID *)BedMapData, sizeof(BedMapData));
+    }
+
+    Lcd.X = 105;
+    Lcd.Y = 0;
+    Lcd.Width = FAN_MAP_WIDTH;
+    Lcd.Height = FAN_MAP_HEIGHT;
+    ShowPtr->Ioctl(LCD_WRITE_MAP, (VOID *)&Lcd);
+//    if ( Info->DevStatus.FanStatus )
+    if ( 1 )
+    {
+        if ( Count++ % 2 )
+        {
+            ShowPtr->Write((VOID *)FanMapData, sizeof(FanMapData));
+        }
+        else
+        {
+            ShowPtr->Write((VOID *)FanMapData_1, sizeof(FanMapData_1));
+        }
+    }
+    else
+    {
+        ShowPtr->Write((VOID *)FanMapData, sizeof(FanMapData));
+    }
+
+    Lcd.X = 105;
+    Lcd.Y = 27;
+    memset(Buff, 0, sizeof(Buff));
+//    sprintf(Buff, "%d%%", GetCurFansSpeed());
+    ShowPtr->WriteString(Buff, Lcd.Y, Lcd.X);
+
+    Lcd.X = 3;
+    Lcd.Y = 42;
+    Lcd.Width = FR_MAP_WIDTH;
+    Lcd.Height = FR_MAP_HEIGHT;
+    ShowPtr->Ioctl(LCD_WRITE_MAP, (VOID *)&Lcd);
+    ShowPtr->Write((VOID *)FrMapData, sizeof(FrMapData));
+#endif
+
+    //绘制进度条的外框
+    Lcd.X = 52;
+    Lcd.Y = 49;
+    Lcd.Width = 50;
+    Lcd.Height = 3;
+    ShowPtr->Ioctl(LCD_WRITE_RECTANGLE, (VOID *)&Lcd);
+
+    //绘制进度条的进度
+    Lcd.X = 52;
+    Lcd.Y = 50;
+    Lcd.Width = (Lcd.Width * Info->Progress.Progress) / 100;
+    ShowPtr->Ioctl(LCD_WRITE_HOR_LINE, &Lcd);
+
+
+    ShowPtr->Ioctl(LCD_FLUSH, (VOID*)&CmdParam);
+#endif
+    return 1;
+}
+
+
+S32 ShowBootScreen(VOID *DataPtr)
+{
+    if ( !ShowPtr )
+        return 0;
+#if 1
+    S32 CmdParam = 0;
+    ShowPtr->Ioctl(LCD_CLEAN, (VOID*)&CmdParam);
+ //   ShowPtr->Ioctl(LCD_USING_ASCII_CHARATER_SET, (VOID*)&CmdParam);
+
+    S32 Width = ShowPtr->GetPixelWidth();
+    S32 Height = ShowPtr->GetPixelHeight();
+    struct LcdCtrlParam_t Param;
+    Param.X = 0;
+    Param.Y = 0;
+    Param.Height = Height;
+    Param.Width = Width;
+    ShowPtr->Ioctl(LCD_WRITE_MAP, (VOID *)&Param);
+    ShowPtr->Write(BootMapData, sizeof(BootMapData));  //直接写了
+
+    //将内容刷到屏幕上
+    ShowPtr->Ioctl(LCD_FLUSH, (VOID *)&CmdParam);
+#endif
+
+    return 1;
+}
+
+
+
+
+

@@ -1,0 +1,358 @@
+/*
+ * Copyright (c) 2006-2020, RT-Thread Development Team
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Change Logs:
+ * Date           Author       Notes
+ * 2020-11-17     cx2470       the first version
+ */
+
+#include "FansSpeedMenuItem.h"
+#include "ShowAction.h"
+#include "CrLcdShowStruct.h"
+#include "SpecialDisplay.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "CrConfig.h"
+#include "QueueCommonFuns.h"
+#include "CrMsgType.h"
+#include "CrSleep.h"
+#include "CrSharedMsgQueue.h"
+#include "CrMsgQueue.h"
+
+//速度与parammodel交互和运动的交互
+static CrMsg_t ParamFansRecv = NULL;
+static CrMsgQueue_t ParamFansSend = NULL;
+static CrMsg_t HeaterRecv = NULL;
+static CrMsgQueue_t HeaterSend = NULL;
+static S32 GetAttr = 0;
+static S32 GetHeater = 0;
+static struct ViewTargetTemperSetMsg_t TemperAttr;
+static struct ViewHeaterTemperMsg_t HeaterTemper;
+
+VOID FanQueueInit()
+{
+    ParamFansRecv = ViewRecvQueueOpen(TEMPER_REQUEST_QUEUE, sizeof(struct ViewTargetTemperSetMsg_t));
+    ParamFansSend = ViewSendQueueOpen(PARAM_TEMPER_SET_QUEUE, sizeof(struct ViewTargetTemperSetMsg_t));
+    HeaterSend = ViewSendQueueOpen(TEMPER_REQUEST_QUEUE, sizeof(struct ViewHeaterTemperMsg_t));
+    HeaterRecv = ViewRecvQueueOpen(TEMPER_REQUEST_QUEUE, sizeof(struct ViewHeaterTemperMsg_t));
+}
+
+S32 FansGetParm(struct ViewTargetTemperSetMsg_t *Accele, struct ViewTargetTemperSetMsg_t *OutAttr)
+{
+    if ( !Accele || !OutAttr )
+        return 0;
+
+    U32 MsgPri = 1;
+    S32 Ret = -1;
+
+    if ( IsValidMsgQueue(ParamFansSend) )
+    {
+        Ret = QueueSendMsg(ParamFansSend, (S8 *)Accele, sizeof(struct ViewTargetTemperSetMsg_t), MsgPri);
+    }
+
+    CrM_Sleep(5);
+
+    if ( ParamFansRecv )
+    {
+        S8 Buff[20] = {0};
+        if ( CrMsgRecv(ParamFansRecv, Buff, sizeof(Buff), &MsgPri) < 0)
+        {
+            return 0;
+        }
+
+        memcpy(OutAttr, Buff, sizeof(struct ViewTargetTemperSetMsg_t));
+    }
+
+    return 1;
+}
+
+S32 FanGetTemperInfo(struct ViewHeaterTemperMsg_t *Accele, struct ViewHeaterTemperMsg_t *OutAttr)
+{
+    if ( !Accele || !OutAttr )
+        return 0;
+
+    U32 MsgPri = 1;
+    S32 Ret = -1;
+
+    if ( IsValidMsgQueue(HeaterSend) )
+    {
+        Ret = QueueSendMsg(HeaterSend, (S8 *)Accele, sizeof(struct ViewHeaterTemperMsg_t), MsgPri);
+    }
+
+    CrM_Sleep(5);
+
+    if ( HeaterRecv )
+    {
+        S8 Buff[20] = {0};
+        if ( CrMsgRecv(HeaterRecv, Buff, sizeof(Buff), &MsgPri) < 0)
+        {
+            return 0;
+        }
+
+        memcpy(OutAttr, Buff, sizeof(struct ViewHeaterTemperMsg_t));
+    }
+
+    return 1;
+}
+
+#if 0
+VOID  SetPLAFanSpeed()
+{
+    struct ViewTargetTemperSetMsg_t Preset = {0};
+//    Preset.Action = GET_FANS_SPEED;
+
+//    FansGetParm(&Preset, &Preset.Set.Pla.FansSpeed, &FansSpeedConfig_t.FansSpeed, sizeof(struct ViewTargetTemperSetMsg_t));
+    
+    U32 MsgPri = 1;
+//    Preset.Action = SET_FANS_SPEED;
+    if ( FansSend )
+    {
+//        CrMsgSend(FansSend, (S8 *)Preset, sizeof(struct ViewTargetTemperSetMsg_t), MsgPri);
+    }
+ //   FansSpeedConfig_t.FansSpeed = FansSpeedConfig_t.PLAFansSpeed;
+} // FIXME:设置风扇速度}
+VOID  SetABSFanSpeed()
+{
+    struct ViewTargetTemperSetMsg_t Preset = {0};
+//    Preset.Action = GET_FANS_SPEED;
+
+//    FansGetParm(&Preset, &Preset.Set.Abs.FansSpeed, &FansSpeedConfig_t.FansSpeed, sizeof(struct ViewTargetTemperSetMsg_t));
+    
+    U32 MsgPri = 1;
+//    Preset.Action = SET_FANS_SPEED;
+    /*Set FansSpeed*/
+    if ( FansSend )
+    {
+//        CrMsgSend(FansSend, (S8 *)Preset, sizeof(struct ViewTargetTemperSetMsg_t), MsgPri);
+    }
+
+ //   FansSpeedConfig_t.FansSpeed = FansSpeedConfig_t.ABSFansSpeed;
+}// FIXME:设置风扇速度}
+
+VOID *FansSpeedOKAction(VOID *ArgOut, VOID *ArgIn, S32 *Value)
+{
+    if ( !ArgOut )
+        return NULL;
+
+    S32 *BackParent = (S32 *)ArgOut;
+    *BackParent = BACK_PARENT;
+
+    struct ViewTargetTemperSetMsg_t Preset = {0};
+//    Preset.Action = SET_FANS_SPEED;
+//    Preset.Set.Preset.FansSpeed = FansSpeedConfig_t.FansSpeed;
+    /*Set FansSpeed*/
+    if ( FansSend )
+    {
+//        CrMsgSend(FansSend, (S8 *)Preset, sizeof(struct ViewTargetTemperSetMsg_t), MsgPri);
+    }
+
+    //FIXME::set fan Speed
+    return (VOID *)(Value);
+}
+#endif
+
+S32   GetCurFansSpeed()
+{
+    return HeaterTemper.Info.CurTemper.FanSpeed;
+}
+
+S32 FanSpeedSpecialDisplay(VOID *Arg)
+{
+    struct ViewHeaterTemperMsg_t Preset = {0};
+    HeaterTemper.Action = GET_HEATER_MANAGER_ATTR;
+
+    if( FanGetTemperInfo(&HeaterTemper, &Preset) >= 0 )
+        memcpy(&HeaterTemper, &Preset, sizeof(struct ViewHeaterTemperMsg_t));
+
+    S8 Temp[5] = {0};
+    snprintf(Temp, sizeof(Temp), "%d%%", HeaterTemper.Info.CurTemper.FanSpeed);
+
+    return SpecialMenuDisplay(Arg, Temp);
+}
+
+VOID* FansSpeedMenuUPAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if ( HeaterTemper.Info.CurTemper.FanSpeed < 100 )
+        (HeaterTemper.Info.CurTemper.FanSpeed)++;
+
+    return (VOID *)(&HeaterTemper.Info.CurTemper.FanSpeed);
+}
+
+VOID* FansSpeedMenuDownAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if ( HeaterTemper.Info.CurTemper.FanSpeed > 0 )
+        (HeaterTemper.Info.CurTemper.FanSpeed)--;
+
+    return (VOID *)(&HeaterTemper.Info.CurTemper.FanSpeed);
+}
+
+VOID* FansSpeedMenuOKAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if ( !ArgOut )
+    return NULL;
+
+    S32 *BackParent = (S32 *)ArgOut;
+    *BackParent = BACK_PARENT;
+
+    HeaterTemper.Info.TargetTemper.FanSpeed = HeaterTemper.Info.CurTemper.FanSpeed;
+    HeaterTemper.Action = SET_HEATER_MANAGER_ATTR;
+    GetHeater = 0;
+
+    QueueSendMsg(HeaterSend, (S8 *)&HeaterTemper, sizeof(HeaterTemper), 1);
+
+    return (VOID *)&HeaterTemper.Info.TargetTemper.FanSpeed;
+}
+
+
+S32 FansSpeedMenuShow(VOID *Arg)
+{
+    if ( !GetHeater )
+    {
+        struct ViewHeaterTemperMsg_t Preset = {0};
+        HeaterTemper.Action = GET_HEATER_MANAGER_ATTR;
+
+        if( FanGetTemperInfo(&HeaterTemper, &Preset) >= 0 )
+            memcpy(&HeaterTemper, &Preset, sizeof(struct ViewHeaterTemperMsg_t));
+
+        GetHeater = 1;
+    }
+    
+    S8 Temp[5] = {0};
+    snprintf(Temp, sizeof(Temp), "%3d%%", HeaterTemper.Info.CurTemper.FanSpeed);
+
+    return SpecialContenDisplay(TUNE_ITEM_FANSPEED_NAME_ID, 0, Temp);
+}
+
+
+/***********************参数设置****************************/
+
+S32 PLAFanSpeedSpecialDisplay(VOID *Arg)
+{
+    struct ViewTargetTemperSetMsg_t Preset = {0};
+    TemperAttr.Action = GET_TEMPER_MSG;
+
+    if ( FansGetParm(&TemperAttr, &Preset) > 0)
+        memcpy(&TemperAttr, &Preset, sizeof(struct ViewTargetTemperSetMsg_t));
+
+    S8 Temp[9] = {0};
+    snprintf(Temp, sizeof(Temp), "%d%%", TemperAttr.Set.Pla.FansSpeed);
+
+    return SpecialMenuDisplay(Arg, Temp);
+}
+
+VOID* PLAFansSpeedMenuUPAction(VOID *ArgOut, VOID *ArgIn)
+{
+
+    if ( TemperAttr.Set.Pla.FansSpeed < 100 )
+        (TemperAttr.Set.Pla.FansSpeed)++;
+
+    return (VOID *)(&TemperAttr.Set.Pla.FansSpeed);
+}
+
+VOID* PLAFansSpeedMenuDownAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if ( TemperAttr.Set.Pla.FansSpeed > 0 )
+        (TemperAttr.Set.Pla.FansSpeed)--;
+
+    return (VOID *)(&TemperAttr.Set.Pla.FansSpeed);
+}
+
+VOID* PLAFansSpeedMenuOKAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if ( !ArgOut )
+        return NULL;
+
+    S32 *BackParent = (S32 *)ArgOut;
+    *BackParent = BACK_PARENT;
+    GetAttr = 0;
+
+    TemperAttr.Action = SET_TEMPER_MSG;
+
+    QueueSendMsg(ParamFansSend, (S8 *)&TemperAttr, sizeof(TemperAttr), 1);
+
+    return (VOID *)&TemperAttr;
+}
+
+S32 PLAFansSpeedMenuShow(VOID *Arg)
+{
+    if ( !GetAttr )
+    {
+        struct ViewTargetTemperSetMsg_t Preset = {0};
+        TemperAttr.Action = GET_TEMPER_MSG;
+
+        if ( FansGetParm(&TemperAttr, &Preset) > 0)
+            memcpy(&TemperAttr, &Preset, sizeof(struct ViewTargetTemperSetMsg_t));
+
+        GetAttr = 1;
+    }
+
+    S8 Temp[9] = {0};
+    snprintf(Temp, sizeof(Temp), "%d%%", TemperAttr.Set.Pla.FansSpeed);
+
+    return SpecialContenDisplay(TUNE_ITEM_FANSPEED_NAME_ID, 0, Temp);
+}
+
+VOID* ABSFansSpeedMenuUPAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if ( TemperAttr.Set.Abs.FansSpeed < 100 )
+        (TemperAttr.Set.Abs.FansSpeed)++;
+
+    return (VOID *)(&TemperAttr.Set.Abs.FansSpeed);
+}
+
+S32 ABSFanSpeedSpecialDisplay(VOID *Arg)
+{
+    struct ViewTargetTemperSetMsg_t Preset = {0};
+    TemperAttr.Action = GET_TEMPER_MSG;
+
+    if ( FansGetParm(&TemperAttr, &Preset) > 0)
+        memcpy(&TemperAttr, &Preset, sizeof(struct ViewTargetTemperSetMsg_t));
+
+    S8 Temp[9] = {0};
+    snprintf(Temp, sizeof(Temp), "%d%%", TemperAttr.Set.Abs.FansSpeed);
+
+    return SpecialMenuDisplay(Arg, Temp);
+}
+VOID* ABSFansSpeedMenuDownAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if ( TemperAttr.Set.Abs.FansSpeed > 0 )
+        (TemperAttr.Set.Abs.FansSpeed)--;
+
+    return (VOID *)(&TemperAttr.Set.Abs.FansSpeed);
+}
+
+S32 ABSFansSpeedMenuShow(VOID *Arg)
+{
+    if ( !GetAttr )
+    {
+        struct ViewTargetTemperSetMsg_t Preset = {0};
+        TemperAttr.Action = GET_TEMPER_MSG;
+
+        if ( FansGetParm(&TemperAttr, &Preset) > 0)
+            memcpy(&TemperAttr, &Preset, sizeof(struct ViewTargetTemperSetMsg_t));
+
+        GetAttr = 1;
+    }
+
+    S8 Temp[9] = {0};
+    snprintf(Temp, sizeof(Temp), "%d%%", TemperAttr.Set.Abs.FansSpeed);
+
+    return SpecialContenDisplay(TUNE_ITEM_FANSPEED_NAME_ID, 0, Temp);}
+
+VOID* ABSFansSpeedMenuOKAction(VOID *ArgOut, VOID *ArgIn)
+{
+    if ( !ArgOut )
+        return NULL;
+
+    S32 *BackParent = (S32 *)ArgOut;
+    *BackParent = BACK_PARENT;
+    GetAttr = 0;
+
+    TemperAttr.Action = SET_TEMPER_MSG;
+    QueueSendMsg(ParamFansSend, (S8 *)&TemperAttr, sizeof(TemperAttr), 1);
+
+    return (VOID *)&TemperAttr;
+}

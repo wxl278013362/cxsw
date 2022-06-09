@@ -1,0 +1,14 @@
+---- already_output Matches (13 in 3 files) ----
+_serial_check_buffer_size in serial.c (rt-thread\components\drivers\serial) :     static rt_bool_t already_output = RT_FALSE;
+_serial_check_buffer_size in serial.c (rt-thread\components\drivers\serial) :     if (already_output == RT_FALSE)
+_serial_check_buffer_size in serial.c (rt-thread\components\drivers\serial) :         already_output = RT_TRUE;
+do_output in ulog.c (rt-thread\components\utilities\ulog) :         static rt_bool_t already_output = RT_FALSE;
+do_output in ulog.c (rt-thread\components\utilities\ulog) :         if (already_output == RT_FALSE)
+do_output in ulog.c (rt-thread\components\utilities\ulog) :             already_output = RT_TRUE;
+spark407.SearchResults (G:\cgj\WorkSpace\crspark_407\spark407.si4project) line 1 : ---- already_output Matches (#count#) ----
+spark407.SearchResults (G:\cgj\WorkSpace\crspark_407\spark407.si4project) line 2 : _serial_check_buffer_size in serial.c (rt-thread\components\drivers\serial) :     static rt_bool_t already_output = RT_FALSE;
+spark407.SearchResults (G:\cgj\WorkSpace\crspark_407\spark407.si4project) line 3 : _serial_check_buffer_size in serial.c (rt-thread\components\drivers\serial) :     if (already_output == RT_FALSE)
+spark407.SearchResults (G:\cgj\WorkSpace\crspark_407\spark407.si4project) line 4 : _serial_check_buffer_size in serial.c (rt-thread\components\drivers\serial) :         already_output = RT_TRUE;
+spark407.SearchResults (G:\cgj\WorkSpace\crspark_407\spark407.si4project) line 5 : do_output in ulog.c (rt-thread\components\utilities\ulog) :         static rt_bool_t already_output = RT_FALSE;
+spark407.SearchResults (G:\cgj\WorkSpace\crspark_407\spark407.si4project) line 6 : do_output in ulog.c (rt-thread\components\utilities\ulog) :         if (already_output == RT_FALSE)
+spark407.SearchResults (G:\cgj\WorkSpace\crspark_407\spark407.si4project) line 7 : do_output in ulog.c (rt-thread\components\utilities\ulog) :             already_output = RT_TRUE;

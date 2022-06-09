@@ -1,0 +1,399 @@
+#ifndef _CRMOTIONTYPE_H
+#define _CRMOTIONTYPE_H
+
+#include "CrType.h"
+
+#define STEPPER_NAME_LENGTH  12
+
+//寄存器的枚举
+enum Registers_e
+{
+    GCONF_REG,
+    CHOPCONF_REG,
+    PWMCONF_REG,
+    DRV_STATUS_REG,
+    OTP_READ_REG,
+    ALL_REG,
+};
+
+/*
+enum MicroStepIndex_e{
+    MICROSTEP_256 = 0x00,             //256 mircosteps
+    MICROSTEP_128,
+    MICROSTEP_64,
+    MICROSTEP_32,
+    MICROSTEP_16,
+    MICROSTEP_8,
+    MICROSTEP_4,
+    MICROSTEP_2,
+    MICROSTEP_1,                      //fullstep
+    MICROSTEP_ERR,
+};
+*/
+enum RunState_e
+{
+    STOP,  //停止
+    ACCEL, //加速
+    DECEL, //减速
+    RUN    //运行
+};
+
+enum Coordinate_e
+{
+    X_AXIS,
+    Y_AXIS,
+    Z_AXIS,
+    E_AXIS,
+    AXIS_NUM          //轴的数量
+};
+
+
+/****************************寄存器结构体Begin*********************************************/
+//GCONF寄存器
+struct G_RegisterBit_t
+{
+    U16 I_ScaleAnalog  : 1;    //规模模拟
+    U16 InternalRsense : 1;    //内部限流电阻标识 (0:使用外部感应电阻器操作, 1:内部感应电阻器)
+    U16 EnspreadCycle : 1;     //传播周期
+    U16 Shaft : 1;              //柄
+    U16 IndexOtpw : 1;         //索引otpw
+    U16 IndexStep : 1;         //索引步进
+    U16 PdnDisable : 1;        //pdn的使能
+    U16 MricoStepRegSelect : 1;   //微步进
+    U16 MultiStepFilter : 1;     //多级过滤器
+    U16 TestMode : 1;          //测试模式
+};
+
+union G_Union
+{
+    U16                    Conf : 10;
+    struct G_RegisterBit_t RegistBits;
+};
+
+struct G_ConfRegister_t
+{
+    U32 Addr;
+    union G_Union   G_Conf;
+};
+
+
+struct OtpRegisterBit_t
+{
+    U16 OtpBit    : 2;
+    U16 Rev1      : 1;
+    U16 OtpByte   : 3;
+    U16 Rev2      : 2;
+    U16 OtpMagic  : 8;
+};
+
+union OtpUnion
+{
+    U16                    Conf : 10;
+    struct OtpRegisterBit_t RegistBits;
+};
+
+struct OtpProgRegister_t
+{
+    U32 Addr;
+    union OtpUnion OtpUn;
+};
+
+
+struct ChopRegisterBit_t
+{
+    U32 Toff0   : 1;
+    U32 Toff1   : 1;
+    U32 Toff2   : 1;
+    U32 Toff3   : 1;
+    U32 Hstrt0  : 1;
+    U32 Hstrt1  : 1;
+    U32 Hstrt2  : 1;
+    U32 Hend0   : 1;
+    U32 Hend1   : 1; 
+    U32 Hend2   : 1;
+    U32 Hend3   : 1;
+    U32 Rev1    : 4;
+    U32 Tbl0    : 1;
+    U32 Tbl1    : 1;
+    U32 Vsense  : 1;
+    U32    Rev2    : 6;
+    U32 Mres0   : 1;
+    U32 Mres1   : 1;
+    U32 Mres2   : 1;
+    U32 Mres3   : 1;
+    U32 Intpol  : 1;
+    U32 Dedge   : 1;
+    U32 Diss2g  : 1;
+    U32 Diss2vs : 1;
+};
+
+union ChopUnion
+{
+    U32 Conf;
+    struct ChopRegisterBit_t RegistBits;
+};
+
+struct ChopConfRegister_t
+{
+    U32             Addr;
+    union ChopUnion ChopUn;
+};
+
+struct PwmRegisterBit_t{
+    U32 PwmOfs       : 8;
+    U32 PwmGrad      : 8;
+    U32 PwmFreq0     : 1;
+    U32 PwmFreq1     : 1;
+    U32 PwmAutoScale : 1;
+    U32 PwmAutoGrad  : 1;
+    U32 FreeWheel0   : 1;
+    U32 FreeWheel1   : 1;
+    U32 Rev          : 2;
+    U32 PwmReg       : 4;
+    U32 PwmLim       : 4;
+};
+
+union PwmUnion
+{
+    U32 Conf;
+    struct PwmRegisterBit_t RegistBits;
+};
+
+struct PwmConfRegister_t{
+    U32 Addr;
+    union PwmUnion PwmUn;
+};
+
+
+struct DrvStatusRegisterBit_t
+{
+    U32 Otpw      : 1;
+    U32 Ot        : 1;
+    U32 S2ga      : 1;
+    U32 S2gb      : 1;
+    U32 S2vsa     : 1;
+    U32 S2vsb     : 1;
+    U32 Ola       : 1;
+    U32 Olb       : 1;
+    U32 T120      : 1;
+    U32 T143      : 1;
+    U32 T150      : 1;
+    U32 T157      : 1;
+    U32 Rev       : 4;
+    U32 CsActual  : 5;
+    U32 Rev2      : 9;
+    U32 Stealth   : 1;
+    U32 Stst      : 1;
+};
+
+union DrvStatusUnion
+{
+    U32 Conf;
+    struct DrvStatusRegisterBit_t RegistBits;
+};
+
+struct DrvStatusRegister_t{
+    U32 Addr;
+    union DrvStatusUnion DrvStatusUn;
+};
+
+struct OtpReadRegisterBit_t
+{
+    U32 OtpFclkTrim       : 5;
+    U32 OtpOtTrim         : 1;
+    U32 OtpInternalRsense : 1;
+    U32 OtpTbl            : 1;
+    U32 OtpPwmGrad        : 4;
+    U32 OtpPwmAutoGrad    : 1;
+    U32 Otp_T_PwmThrs     : 3;
+    U32 OtpPwmOfs         : 1;
+    U32 OtpPwmReg         : 1;
+    U32 OtpPwmFreq        : 1;
+    U32 Otp_I_HoldDelay   : 2;
+    U32 Otp_I_Hold        : 2;
+    U32 OtpEnSpreadCycle  : 1;
+};
+
+union OtpReadUnion
+{
+    U32 Conf;
+    struct OtpReadRegisterBit_t RegistBits;
+};
+
+struct OtpReadRegister_t{
+    U32 Addr;
+    union OtpReadUnion OtpReadUn;
+};
+
+/****************************寄存器结构体end*********************************************/
+//电机的转动属性
+struct StepperMotionBaseAttr_t
+{
+    // 步进
+    U32                        SubDivision; //细分
+    float                      StepAngle;  //步距角
+    float                      Perimeter;  //周长   uint:mm  （电机轴转动一周的长度）
+};
+
+//驱动属性
+struct StepperDriverAttr_t
+{
+    /* pin part */
+    S32 EnnPinFd;  //使能引脚 （使用的是Gpio文件的操作）
+    S32 DirPinFd;  //方向引脚 （使用的是Gpio文件的操作）
+    S32 StepPinFd; //步进引脚 （使用的是Gpio文件的操作）
+};
+
+//电机的基础属性
+struct StepperBaseAttr_t
+{
+    //Level
+    S8 EnableBaseLevel;    //使能脚基准电平
+    S8 PositiveDirLevel; //正方向基准电平(clockwise)
+
+    //这个是操作的
+    S32 PdUartFd;
+
+    struct StepperMotionBaseAttr_t MotionAttr;
+};
+
+//运动属性
+struct StepperMotionExpendAttr_t
+{
+    S32 Velocity;     //速度
+    S32 MaxVelocity;  //最大速度
+    S32 MinVelocity;  //最小速度
+    S32 Acceleration; //加速度
+    S32 Deceleration; //减速加速度
+    S32 Jerk;         //Jerk，加速度导数.(加速度变化率)
+
+    // 分辨率
+    S32 Resolution; //基于StepperMotionBaseAttr_t的三个变量计算而来
+};
+#if 0
+//步进电机
+struct Stepper_t
+{
+    S8                               Name[STEPPER_NAME_LENGTH]; //电机名称
+    struct StepperBaseAttr_t         BaseAttr;
+    struct StepperDriverAttr_t       DriverAttr;
+    S32                              CurPosition; //当前绝对位置
+    struct StepperMotionExpendAttr_t ExpendAttr;
+    /* registers part */
+    struct ChopConfRegister_t        ChopConf;
+    struct PwmConfRegister_t         PwmConf;
+    struct DrvStatusRegister_t       DrvStatus;
+    struct G_ConfRegister_t          G_Conf;
+};
+#endif
+
+//电机单步运动属性
+struct StepperOneStepAttr_t
+{
+    U8  RunState;           //运动状态
+    U8  Dir;                //方向
+    U32 StepDelayTime;      //单步延迟
+    U32 DecelStartPos;      //减速开始位置
+    U32 DecelSteps;         //减速步数
+    U32 MinDelayTime;       //最小延迟
+    U32 AccelCount;         //加速/减速计数
+    U32 EntryBaseSteps;     //进入的基本步数
+    U32 ExitBaseSteps;      //退出的基本步数
+    U32 RestDelayTime;      //延时时间余数
+    U32 DelayTimeCount;     //延时时间统计
+    U32 LastAccelDelayTime; //加速过程中最后一次延时
+    U32 StepCount;          //已运行的总步数
+};
+
+//平面坐标
+struct FlatCoordinates_t
+{
+    float X;
+    float Y;
+};
+
+//运动坐标
+struct MotionCoordinate_t
+{
+    struct FlatCoordinates_t Flat;
+    float  Z;
+    float  E;
+};
+
+
+//圆的信息 (其中加了范围是减少电机运动时的计算)
+struct CircleInfo_t
+{
+
+    float Radius;
+    float MinX;    //圆上的点映射在X轴上的位置的最小值
+    float MaxX;    //圆上的点映射在X轴上的位置的最大值
+    float MinY;    //圆上的点映射在Y轴上的位置的最小值
+    float MaxY;    //圆上的点映射在Y轴上的位置的最大值
+    struct FlatCoordinates_t CenterPos;
+};
+
+struct Block_t
+{
+    S8    Busy;
+    S8    Dir;          /* direction of stepper,low 4 bit for each axis.*/
+
+    float DeviationX;   //X轴误差
+    float DeviationY;   //Y轴误差
+    float DeviationZ;   //Z轴误差
+    float DeviationE;   //E轴误差
+
+    float SlopeX;       //X轴斜率
+    float SlopeY;       //Y轴斜率
+    float SlopeZ;       //Z轴斜率
+    float SlopeE;       //E轴斜率
+    
+    float NominalSpeed; //运动最大速度
+    float EntrySpeed;   //进入速度
+    float ExitSpeed;    //退出速度
+    float MaxEntrySpeed;//最大的进入速度
+    float Distance;     //运动距离(单位：毫米)
+    float Accel;        //加速度
+
+    long  StepsX;        //X轴步进
+    long  StepsY;        //Y轴步进
+    long  StepsZ;        //Z轴步进
+    long  StepsE;        //E轴步进
+    long  StepsCount;    //当前块要运动的总步数
+    long  CompletedSteps;  //当前块已运动的步数
+
+    struct StepperOneStepAttr_t StepAttr; // For bresenham (所有电机在这个运动块中移动一步的属性)
+};
+
+/*
+//轴的标记
+struct AxisMark_t
+{
+    S8 X;
+    S8 Y;
+    S8 Z;
+    S8 E;
+    S8 F;
+};
+*/
+
+//电机运动的实体
+struct MoveEntry_t
+{
+    S32 Accel;
+    S32 Velocity;
+    struct MoveEntry_t *Next;
+    struct MotionCoordinate_t Coord;
+};
+
+#if 0
+//运动参数
+struct MotionParam_t
+{
+    float Dis;
+    float Accel;
+    float Speed;
+};
+#endif
+
+#endif
